@@ -1,114 +1,133 @@
 import 'package:flutter/material.dart';
-import '../database/local_database.dart';
 import '../models/user_model.dart';
+import '../database/local_database.dart';
 import 'add_user_screen.dart';
+import 'user_dashboard_screen.dart';
 
 class UserSelectionScreen extends StatefulWidget {
-  const UserSelectionScreen({super.key});
+  const UserSelectionScreen({Key? key}) : super(key: key);
 
   @override
-  State<UserSelectionScreen> createState() => _UserSelectionScreenState();
+  State<UserSelectionScreen> createState() =>
+      _UserSelectionScreenState();
 }
 
-class _UserSelectionScreenState extends State<UserSelectionScreen> {
-  List<UserModel> users = [];
+class _UserSelectionScreenState
+    extends State<UserSelectionScreen> {
+  List<UserModel> _users = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    loadUsers();
+    _loadUsers();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    loadUsers();
-  }
-
-  Future<void> loadUsers() async {
-    final data = await LocalDatabase.getUsers();
-    if (!mounted) return;
+  Future<void> _loadUsers() async {
+    final users = await LocalDatabase.getUsers();
     setState(() {
-      users = data;
+      _users = users;
+      _isLoading = false;
     });
   }
 
-  Future<void> confirmDelete(UserModel user) async {
-    final result = await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Delete User"),
-        content: Text("Are you sure you want to delete ${user.name}?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true) {
-      await LocalDatabase.deleteUser(user.id);
-      loadUsers();
-    }
-  }
-
-  Future<void> navigateToAddUser() async {
-    await Navigator.push(
+  Future<void> _addUser() async {
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => const AddUserScreen(),
       ),
     );
 
-    loadUsers();
+    if (result == true) {
+      _loadUsers();
+    }
+  }
+
+  Future<void> _deleteUser(UserModel user) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Delete User"),
+          content: Text(
+              "Are you sure you want to delete ${user.name}? This action cannot be undone."),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(context, false),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(context, true),
+              child: const Text(
+                "Delete",
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true) {
+      await LocalDatabase.deleteUser(user.id);
+      _loadUsers();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Select User")),
-      body: users.isEmpty
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              "No Users Added",
-              style: TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: navigateToAddUser,
-              icon: const Icon(Icons.add),
-              label: const Text("Add User"),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        title: const Text("Select User"),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addUser,
+        child: const Icon(Icons.add),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _users.isEmpty
+          ? const Center(
+        child: Text("No Users Found"),
       )
           : ListView.builder(
-        itemCount: users.length,
+        itemCount: _users.length,
         itemBuilder: (context, index) {
-          final user = users[index];
-          return ListTile(
-            title: Text(user.name),
-            subtitle:
-            Text("Age: ${user.age} | ${user.assistanceLevel}"),
-            onLongPress: () => confirmDelete(user),
+          final user = _users[index];
+
+          return Card(
+            margin: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6),
+            child: ListTile(
+              title: Text(
+                user.name,
+                style: const TextStyle(
+                    fontWeight:
+                    FontWeight.bold),
+              ),
+              subtitle: Text(
+                "Age: ${user.age} | ${user.assistanceLevel}",
+              ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        UserDashboardScreen(
+                            user: user),
+                  ),
+                );
+              },
+              onLongPress: () =>
+                  _deleteUser(user),
+            ),
           );
         },
       ),
-      floatingActionButton: users.isNotEmpty
-          ? FloatingActionButton(
-        onPressed: navigateToAddUser,
-        child: const Icon(Icons.add),
-      )
-          : null,
     );
   }
 }
